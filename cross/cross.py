@@ -35,7 +35,7 @@ def populateMatrix(list_of_edges, layer_a, layer_b):
         if edge[0] in layer_a:
             matrix[layer_a.index(edge[0])][layer_b.index(edge[1])] = 1
     cross_count = countCrosses(matrix, len(layer_a)-1, len(layer_a), len(layer_b))
-    return matrix, cross_count
+    return cross_count
 
 # populatePermutedMatrix fills in the edge matrix with the edges between two nodes of two different layers for a given permutation. 1 indicates that there is an edge.
 def populatePermutedMatrix(list_of_edges, layer_a, layer_b, permute_a, permute_b):
@@ -44,7 +44,7 @@ def populatePermutedMatrix(list_of_edges, layer_a, layer_b, permute_a, permute_b
         if edge[0] in permute_a:
             matrix[permute_a.index(edge[0])][permute_b.index(edge[1])] = 1
     cross_count = countCrosses(matrix, len(layer_a)-1, len(layer_a), len(layer_b))
-    return matrix, cross_count
+    return cross_count
 
 # printMatrix is a helper function for printing a matrix
 def printMatrix(m):
@@ -56,6 +56,7 @@ def main():
     list_of_layers = []
     list_of_edges = []
     index = 0
+    number_of_layers = 0
     for line in fileinput.input():
         new_command = ''
         if (re.findall('in_layer', line)):
@@ -83,51 +84,60 @@ def main():
             # print("LAYERS")
             new_command = line.replace('layers(', '')
             new_command = new_command.replace(').', '')
+            number_of_layers = int(new_command)
     fileinput.close() # Close the file
 
-    # CREATE INITIAL EDGE MATRICES
-    count = 0
-    count_1 = 0
-    count_2 = 0
+    # SET THE INITIAL TOTAL CROSS COUNT TO THE GIVEN LAYERS AND NODE POSITIONS
+    total_cross_count = 0
+    for i in range(number_of_layers - 1):
+        total_cross_count = total_cross_count + populateMatrix(list_of_edges, list_of_layers[i], list_of_layers[i + 1])  # Get the cross count for the comparison between the given layers and add it to the total count
+    if total_cross_count != 0:  # Optimisation: If the given total cross count is not 0, then check through the permutations. Else, it is already optimised :)
+        start_time = time.time()
+        # GENERATE THE PERMUTATIONS
+        list_of_permutations = [{} for x in range(number_of_layers)] # Create the list of layer permutations
+        for i in range(len(list_of_layers)):
+            node_permutations = [] # Reset the layer node permutation list
+            for node_list in itertools.permutations(list_of_layers[i]):
+                node_permutations.append(node_list) # For each permutation in the layer, add it to the node list
+            list_of_permutations[i] = node_permutations # Add the list of all node permutations for a given layer to the full list of permutations
+        # RUN THROUGH THE PERMUTATIONS
+        for p in itertools.product(*list_of_permutations):
+            count = 0 # Reset the cross count when running permutations
+            for i in range(number_of_layers - 1):
+                count = count + populatePermutedMatrix(list_of_edges, list_of_layers[i], list_of_layers[i+1], p[i], p[i+1]) # Get the cross count for the comparison between two layers and add it to the running count
+                if count > total_cross_count: # Optimisation: If the count of the first layers already exceeds the total count, do not compute the cross count for the remaining layers for the given permutation
+                    break
+            if count < total_cross_count: # If the running current cross count is less than our lowest recorded cross count, then update our lowest cross count
+                total_cross_count = count
+                print(p)
+                print(total_cross_count)
+            if total_cross_count == 0: # Optimisation: If the total cross count is 0, then do not check any more permutations. We have found an optimised solution
+                break
 
-    # CREATE INITIAL L1 and L2 MATRIX
-    edge_matrix_1, count_1 = populateMatrix(list_of_edges, list_of_layers[0], list_of_layers[1])
-    # printMatrix(edge_matrix_1)
+    # OLD SOLUTION FOR ONLY 3 LAYERS
+    # for p1 in itertools.permutations(list_of_layers[0]):
+    #     for p2 in itertools.permutations(list_of_layers[1]):
+    #         # Populate the edge matrix between Layers 1 and 2 and get the cross count
+    #         L1_L2_edge_matrix,  L1_L2_cross_count = populatePermutedMatrix(list_of_edges, list_of_layers[0], list_of_layers[1], p1, p2)
+    #         for p3 in itertools.permutations(list_of_layers[2]):
+    #             # Populate the edge matrix between Layers 2 and 3 and get the cross count
+    #             L2_L3_edge_matrix, L2_L3_cross_count = populatePermutedMatrix(list_of_edges, list_of_layers[1], list_of_layers[2], p2, p3)
+    #             # Sum the calculated cross counts
+    #             count = L1_L2_cross_count + L2_L3_cross_count
+    #             if count < total_cross_count: # If new permutation has less cross counts then save the permutation
+    #                 total_cross_count = count
+    #                 #edge_matrix_1 = L1_L2_edge_matrix[:]
+    #                 #edge_matrix_2 = L2_L3_edge_matrix[:]
+    #                 #new_node_list_1 = p1
+    #                 #new_node_list_2 = p2
+    #                 #new_node_list_3 = p3
 
-    # CREATE INITIAL L2 and L3 MATRIX
-    edge_matrix_2, count_2 = populateMatrix(list_of_edges, list_of_layers[1], list_of_layers[2])
-    # printMatrix(edge_matrix_2)
-
-
-    total_cross_count = count_1 + count_2 # The cross count for the end
-    #print("\nINITIAL COUNT: %i" % (total_cross_count))
-
-    start_time = time.time()
-    # RUN THROUGH THE PERMUTATIONS
-    count = 0 # The cross count when running permutations
-    for p1 in itertools.permutations(list_of_layers[0]):
-        for p2 in itertools.permutations(list_of_layers[1]):
-            # Populate the edge matrix between Layers 1 and 2 and get the cross count
-            L1_L2_edge_matrix,  L1_L2_cross_count = populatePermutedMatrix(list_of_edges, list_of_layers[0], list_of_layers[1], p1, p2)
-            for p3 in itertools.permutations(list_of_layers[2]):
-                # Populate the edge matrix between Layers 2 and 3 and get the cross count
-                L2_L3_edge_matrix, L2_L3_cross_count = populatePermutedMatrix(list_of_edges, list_of_layers[1], list_of_layers[2], p2, p3)
-                # Sum the calculated cross counts
-                count = L1_L2_cross_count + L2_L3_cross_count
-                if count < total_cross_count: # If new permutation has less cross counts then save the permutation
-                    total_cross_count = count
-                    edge_matrix_1 = L1_L2_edge_matrix[:]
-                    edge_matrix_2 = L2_L3_edge_matrix[:]
-                    new_node_list_1 = p1
-                    new_node_list_2 = p2
-                    new_node_list_3 = p3
-
-    # PRINT RESULTS
+    # PRINT RESULT
     print("Optimization: %i" % (total_cross_count))
 
-    # HELPER PRINT STATEMENTS
+    # HELPER PRINT RESULTS
     # print("\n\n----- RESULTS -----\n")
-    # print("\n --- %s seconds --- \n" % (time.time() - start_time))
+    print("\n --- %s seconds --- \n" % (time.time() - start_time))
     # list_of_layers[0] = new_node_list_1
     # list_of_layers[1] = new_node_list_2
     # list_of_layers[2] = new_node_list_3
